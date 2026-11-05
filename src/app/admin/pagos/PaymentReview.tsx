@@ -35,7 +35,7 @@ export function PaymentReview({ id }: { id: string }) {
             Cancelar
           </button>
         </div>
-        {error && <p className="text-[12px] text-negative">{error}</p>}
+        {error && <p className="text-[12px] text-rojo">{error}</p>}
       </div>
     );
   return (
@@ -57,7 +57,7 @@ export function PaymentReview({ id }: { id: string }) {
       <button type="button" className="app-btn app-btn-secondary !h-9" onClick={() => setRejecting(true)}>
         Rechazar
       </button>
-      {error && <p className="text-[12px] text-negative">{error}</p>}
+      {error && <p className="text-[12px] text-rojo">{error}</p>}
     </div>
   );
 }

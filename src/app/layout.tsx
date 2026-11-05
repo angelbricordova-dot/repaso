@@ -1,38 +1,33 @@
 import type { Metadata, Viewport } from "next";
+import { Bricolage_Grotesque, Figtree } from "next/font/google";
+import { BRAND, SITE_URL } from "@/lib/brand";
 import "./globals.css";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+const bricolage = Bricolage_Grotesque({ subsets: ["latin"], variable: "--font-bricolage", display: "swap" });
+const figtree = Figtree({ subsets: ["latin"], variable: "--font-figtree", display: "swap" });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl),
-  title: {
-    default: "Repaso · Tus clases, listas para el parcial",
-    template: "%s · Repaso",
-  },
+  metadataBase: new URL(SITE_URL),
+  title: { default: `${BRAND} · Tu tarea, resuelta a tiempo`, template: `%s · ${BRAND}` },
   description:
-    "Sube el PDF, las láminas, fotos del cuaderno o la grabación de tu clase y Repaso te prepara resumen, fichas y quiz en español. Hecho para universitarios en Venezuela.",
+    "Personas reales resuelven tu tarea y te la entregan antes de tu hora de entrega. Bachillerato y universidad. 10 tareas por $5,99 al mes, pagables en bolívares por Pago Móvil.",
   openGraph: {
-    title: "Repaso · Tus clases, listas para el parcial",
-    description: "Resumen, fichas y quiz de cualquier clase. Pagas en bolívares por Pago Móvil.",
+    title: `${BRAND} · Tu tarea, resuelta a tiempo`,
+    description: "Mándala hoy, te llega resuelta. Tu primera tarea es gratis. Pagas en bolívares a tasa BCV.",
     locale: "es_VE",
     type: "website",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#ff87ab",
+  themeColor: "#a9d2f0",
   width: "device-width",
   initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es-VE">
-      <head>
-        <link rel="preconnect" href="https://api.fontshare.com" />
-        <link rel="preconnect" href="https://cdn.fontshare.com" crossOrigin="" />
-        <link href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600&display=swap" rel="stylesheet" />
-      </head>
+    <html lang="es-VE" className={`${bricolage.variable} ${figtree.variable}`}>
       <body>{children}</body>
     </html>
   );

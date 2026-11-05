@@ -4,7 +4,6 @@ const nextConfig: NextConfig = {
   // La app depende de la sesión (cookies) en casi cada página, así que todo se
   // renderiza por petición. Cache Components queda apagado a propósito.
   cacheComponents: false,
-  serverExternalPackages: ["unpdf", "mammoth"],
   experimental: {
     serverActions: { bodySizeLimit: "2mb" },
   },

@@ -1,110 +1,93 @@
 import Link from "next/link";
 import { Page, TitleRow } from "@/components/app/Page";
+import { TaskRow } from "@/components/app/TaskRow";
 import { requireAdmin } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { formatUsd, timeAgo } from "@/lib/format";
-import { PLANS, startOfMonthIso } from "@/lib/plans";
-
-// Precio por millón de tokens (USD) para estimar el gasto en IA. Ajusta si cambias de modelo.
-const PRICES: Record<string, { in: number; out: number }> = {
-  "claude-opus-5-5": { in: 4, out: 20 },
-  "claude-sonnet-5-5": { in: 2, out: 10 },
-  "claude-haiku-5-5": { in: 0.1, out: 0.5 },
-};
+import { startOfMonthIso } from "@/lib/plans";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { Task } from "@/lib/types";
 
 export default async function AdminHome() {
   await requireAdmin();
   const db = createAdminClient();
-  const monthStart = startOfMonthIso();
-  const [users, paid, mats, pays, reqs, approved] = await Promise.all([
-    db.from("profiles").select("id", { count: "exact", head: true }),
-    db.from("profiles").select("plan").neq("plan", "gratis").gt("plan_expires_at", new Date().toISOString()),
-    db.from("materials").select("ai_model, tokens_in, tokens_out").eq("status", "ready").gte("processed_at", monthStart),
-    db.from("payments").select("id, amount_usd, method, reference, created_at, plan").eq("status", "pendiente").order("created_at").limit(5),
-    db.from("help_requests").select("id, subject, topic, created_at, status").in("status", ["recibido", "en_revision"]).order("created_at").limit(5),
-    db.from("payments").select("amount_usd").eq("status", "aprobado").gte("reviewed_at", monthStart),
+  const month = startOfMonthIso();
+  const now = new Date().toISOString();
+  const [users, paid, monthTasks, open, late, pays, revenue, ratings] = await Promise.all([
+    db.from("profiles").select("id", { count: "exact", head: true }).eq("role", "student"),
+    db.from("profiles").select("plan").neq("plan", "gratis").gt("plan_expires_at", now),
+    db.from("tasks").select("id", { count: "exact", head: true }).gte("created_at", month).neq("status", "cancelada"),
+    db.from("tasks").select("id, number, title, subject, task_type, status, due_at, urgent").in("status", ["recibida", "en_proceso", "necesita_info", "corrigiendo"]).order("due_at").limit(5),
+    db.from("tasks").select("id", { count: "exact", head: true }).in("status", ["recibida", "en_proceso", "corrigiendo"]).lt("due_at", now),
+    db.from("payments").select("id, amount_usd, reference, created_at").eq("status", "pendiente").order("created_at").limit(5),
+    db.from("payments").select("amount_usd").eq("status", "aprobado").gte("reviewed_at", month),
+    db.from("tasks").select("rating").not("rating", "is", null).gte("created_at", month),
   ]);
-
   const paidRows = (paid.data ?? []) as { plan: string }[];
-  const matRows = (mats.data ?? []) as { ai_model: string | null; tokens_in: number | null; tokens_out: number | null }[];
-  const aiCost = matRows.reduce((a, m) => {
-    const key = Object.keys(PRICES).find((k) => (m.ai_model ?? "").startsWith(k)) ?? "claude-opus-5-5";
-    const p = PRICES[key];
-    return a + ((m.tokens_in ?? 0) * p.in + (m.tokens_out ?? 0) * p.out) / 1_000_000;
-  }, 0);
-  const revenue = ((approved.data ?? []) as { amount_usd: number }[]).reduce((a, p) => a + Number(p.amount_usd), 0);
-  const kits = matRows.length;
+  const cobrado = ((revenue.data ?? []) as { amount_usd: number }[]).reduce((a, p) => a + Number(p.amount_usd), 0);
+  const rs = ((ratings.data ?? []) as { rating: number }[]).map((r) => r.rating);
+  const avg = rs.length ? (rs.reduce((a, b) => a + b, 0) / rs.length).toFixed(1).replace(".", ",") : "—";
 
   const kpis = [
-    { label: "Usuarios", value: `${users.count ?? 0}`, caption: `${paidRows.length} con plan pago` },
-    { label: "Kits generados este mes", value: `${kits}`, caption: kits ? `${formatUsd(aiCost / kits)} por kit en promedio` : "Aún ninguno" },
-    { label: "Gasto estimado en IA este mes", value: formatUsd(Math.round(aiCost * 100) / 100), caption: "Kits; el tutor no está incluido" },
-    { label: "Cobrado este mes", value: formatUsd(revenue), caption: `${paidRows.filter((p) => p.plan === "repaso").length} Repaso · ${paidRows.filter((p) => p.plan === "repaso_plus").length} Repaso+` },
+    { label: "Estudiantes", value: `${users.count ?? 0}`, caption: `${paidRows.length} con plan activo` },
+    { label: "Tareas este mes", value: `${monthTasks.count ?? 0}`, caption: `${late.count ?? 0} vencidas sin entregar` },
+    { label: "Cobrado este mes", value: formatUsd(cobrado), caption: `${paidRows.filter((p) => p.plan === "basico").length} Básico · ${paidRows.filter((p) => p.plan === "pro").length} Pro · ${paidRows.filter((p) => p.plan === "full").length} Full` },
+    { label: "Calificación promedio", value: avg, caption: rs.length ? `${rs.length} calificaciones este mes` : "Aún sin calificaciones" },
   ];
 
   return (
-    <Page>
-      <TitleRow title="Resumen" subtitle={`Precios vigentes: Repaso ${formatUsd(PLANS.repaso.priceUsd)} · Repaso+ ${formatUsd(PLANS.repaso_plus.priceUsd)} al mes`} />
-      <section aria-label="Cifras del mes" className="grid grid-cols-2 overflow-hidden rounded-[16px] bg-panel md:grid-cols-4">
+    <Page wide>
+      <TitleRow title="Resumen" />
+      <section aria-label="Cifras del mes" className="grid grid-cols-2 gap-[2px] overflow-hidden rounded-[18px] md:grid-cols-4">
         {kpis.map((k) => (
-          <div key={k.label} className="flex min-h-[128px] flex-col justify-between p-4">
-            <p className="text-[13px] text-soft">{k.label}</p>
-            <p className="num text-[28px] leading-none tracking-[-0.02em]">{k.value}</p>
-            <p className="text-[13px] text-soft">{k.caption}</p>
+          <div key={k.label} className="flex min-h-[120px] flex-col justify-between bg-surface p-4">
+            <p className="text-[13px] text-ink-soft">{k.label}</p>
+            <p className="num font-[family-name:var(--font-display)] text-[28px] font-bold leading-none">{k.value}</p>
+            <p className="text-[12.5px] text-ink-soft">{k.caption}</p>
           </div>
         ))}
       </section>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <section className="panel" aria-labelledby="q-pagos">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 id="q-pagos" className="text-[14px] font-semibold">
-              Pagos por verificar <span className="num ml-1 font-normal text-soft">{pays.data?.length ?? 0}</span>
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <section aria-labelledby="proximas">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 id="proximas" className="text-[17px] font-bold">
+              Próximas a vencer
             </h2>
-            <Link href="/admin/pagos" className="text-[13px] font-medium text-soft hover:text-text">
-              Ver todos
+            <Link href="/admin/tareas" className="text-[14px] font-semibold text-marino-3 hover:underline">
+              Ver cola
             </Link>
           </div>
-          {(pays.data ?? []).length === 0 ? (
-            <p className="rounded-[12px] border border-dashed border-control px-4 py-3 text-[14px] text-soft">No hay pagos pendientes.</p>
+          {(open.data ?? []).length === 0 ? (
+            <p className="rounded-[14px] border border-dashed border-line-strong px-4 py-4 text-[15px] text-ink-soft">No hay tareas abiertas.</p>
           ) : (
             <ul className="flex flex-col gap-2">
-              {(pays.data ?? []).map((p) => (
-                <li key={p.id} className="card flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="text-[14px] font-medium">Ref. {p.reference}</p>
-                    <p className="text-[13px] text-soft">{timeAgo(p.created_at)}</p>
-                  </div>
-                  <span className="num text-[14px]">{formatUsd(Number(p.amount_usd))}</span>
+              {((open.data ?? []) as Task[]).map((t) => (
+                <li key={t.id}>
+                  <TaskRow task={t} href={`/admin/tareas/${t.id}`} />
                 </li>
               ))}
             </ul>
           )}
         </section>
-        <section className="panel" aria-labelledby="q-sol">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 id="q-sol" className="text-[14px] font-semibold">
-              Solicitudes abiertas <span className="num ml-1 font-normal text-soft">{reqs.data?.length ?? 0}</span>
+        <section aria-labelledby="pagos">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 id="pagos" className="text-[17px] font-bold">
+              Pagos por verificar
             </h2>
-            <Link href="/admin/solicitudes" className="text-[13px] font-medium text-soft hover:text-text">
-              Ver bandeja
+            <Link href="/admin/pagos" className="text-[14px] font-semibold text-marino-3 hover:underline">
+              Verificar
             </Link>
           </div>
-          {(reqs.data ?? []).length === 0 ? (
-            <p className="rounded-[12px] border border-dashed border-control px-4 py-3 text-[14px] text-soft">No hay solicitudes abiertas.</p>
+          {(pays.data ?? []).length === 0 ? (
+            <p className="rounded-[14px] border border-dashed border-line-strong px-4 py-4 text-[15px] text-ink-soft">No hay pagos pendientes.</p>
           ) : (
             <ul className="flex flex-col gap-2">
-              {(reqs.data ?? []).map((r) => (
-                <li key={r.id}>
-                  <Link href={`/admin/solicitudes/${r.id}`} className="card flex items-center justify-between gap-3 px-4 py-3 hover:border-control">
-                    <div className="min-w-0">
-                      <p className="truncate text-[14px] font-medium">{r.topic}</p>
-                      <p className="truncate text-[13px] text-soft">
-                        {r.subject} · {timeAgo(r.created_at)}
-                      </p>
-                    </div>
-                    <span className={`pill ${r.status === "en_revision" ? "pill-warning" : ""}`}>{r.status === "en_revision" ? "En revisión" : "Nuevo"}</span>
-                  </Link>
+              {(pays.data ?? []).map((p) => (
+                <li key={p.id} className="card flex items-center justify-between px-4 py-3">
+                  <span>
+                    <span className="block text-[15px] font-semibold">Ref. {p.reference}</span>
+                    <span className="text-[13px] text-ink-soft">{timeAgo(p.created_at)}</span>
+                  </span>
+                  <span className="num text-[15px]">{formatUsd(Number(p.amount_usd))}</span>
                 </li>
               ))}
             </ul>

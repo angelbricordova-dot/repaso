@@ -35,12 +35,26 @@ export function formatMinutes(seconds: number | null | undefined) {
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
-export const KIND_LABEL: Record<string, string> = {
-  pdf: "PDF",
-  slides: "Láminas",
-  doc: "Documento",
-  image: "Foto",
-  audio: "Audio",
-  video: "Video",
-  text: "Texto",
-};
+export function formatDue(iso: string) {
+  return new Intl.DateTimeFormat("es-VE", { timeZone: "America/Caracas", weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
+}
+
+/** «en 3 h», «mañana 6:00 p. m.», «vencida hace 2 h» */
+export function dueIn(iso: string) {
+  const ms = new Date(iso).getTime() - Date.now();
+  const h = ms / 3_600_000;
+  if (h < 0) return `vencida hace ${Math.max(1, Math.round(-h))} h`;
+  if (h < 1) return `en ${Math.max(1, Math.round(h * 60))} min`;
+  if (h < 24) return `en ${Math.round(h)} h`;
+  const d = Math.round(h / 24);
+  return d === 1 ? "mañana" : `en ${d} días`;
+}
+
+/** ¿Ya pasó esa fecha? (en el servidor se evalúa una vez por petición) */
+export function isPast(iso: string) {
+  return new Date(iso).getTime() < Date.now();
+}
+
+export function isFuture(iso: string | null | undefined) {
+  return Boolean(iso) && new Date(iso!).getTime() > Date.now();
+}

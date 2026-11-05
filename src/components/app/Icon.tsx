@@ -2,7 +2,7 @@
 export type IconName =
   | "home" | "upload" | "book" | "help" | "card" | "user" | "menu" | "logout" | "shield" | "inbox"
   | "users" | "settings" | "file" | "mic" | "video" | "image" | "text" | "slides" | "check" | "x"
-  | "arrow-left" | "arrow-right" | "trash" | "send" | "refresh" | "download" | "plus" | "link";
+  | "arrow-left" | "arrow-right" | "trash" | "send" | "refresh" | "download" | "plus" | "link" | "clock" | "gift" | "list" | "star" | "paperclip" | "whatsapp";
 
 const PATHS: Record<IconName, string> = {
   home: "M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z",
@@ -33,6 +33,12 @@ const PATHS: Record<IconName, string> = {
   download: "M12 4v12m0 0 4.5-4.5M12 16l-4.5-4.5M4 20h16",
   plus: "M12 5v14M5 12h14",
   link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+  clock: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Zm0-13v4.5l3 2",
+  gift: "M4 11h16v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM3 7h18v4H3zm9 0v14M12 7S10.5 3 8 3a2 2 0 0 0 0 4m4 0s1.5-4 4-4a2 2 0 0 1 0 4",
+  list: "M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01",
+  star: "m12 3.5 2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z",
+  paperclip: "m20 11.5-8.1 8.1a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4L15 6.9",
+  whatsapp: "M4 20l1.3-3.9A8.5 8.5 0 1 1 8 19zM9 9c0 3 3 6 6 6l1.5-1.5-2-1-1 1c-1 0-2.5-1.5-2.5-2.5l1-1-1-2z",
 };
 
 export function Icon({ name, className = "size-4" }: { name: IconName; className?: string }) {

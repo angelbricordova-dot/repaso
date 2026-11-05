@@ -2,11 +2,11 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { deleteAccount, updateProfile } from "@/app/app/actions";
+import { LevelSelect } from "@/components/landing/LevelSelect";
 import { createClient } from "@/lib/supabase/client";
+import type { Level } from "@/lib/types";
 
-type P = { full_name: string; university: string; career: string; semester: string; phone: string };
-
-const UNIVERSITIES = ["UCV", "UCAB", "USB", "ULA", "LUZ", "UC", "UNIMET", "UCLA", "UDO", "UNEFA", "UPEL", "URU", "UNET", "USM", "UJMV", "UNEXPO"];
+type P = { full_name: string; whatsapp: string; level: Level; institution: string; career: string };
 
 export function ProfileForm({ initial }: { initial: P }) {
   const router = useRouter();
@@ -27,46 +27,41 @@ export function ProfileForm({ initial }: { initial: P }) {
         });
       }}
     >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="f-name" className="field-label">
+            Nombre y apellido
+          </label>
+          <input id="f-name" className="field" value={p.full_name} onChange={set("full_name")} maxLength={120} autoComplete="name" />
+        </div>
+        <div>
+          <label htmlFor="f-wa" className="field-label">
+            WhatsApp
+          </label>
+          <input id="f-wa" className="field num" value={p.whatsapp} onChange={set("whatsapp")} maxLength={30} inputMode="tel" placeholder="0412-0000000" autoComplete="tel" />
+        </div>
+      </div>
       <div>
-        <label htmlFor="f-name" className="field-label">
-          Nombre y apellido
-        </label>
-        <input id="f-name" className="field" value={p.full_name} onChange={set("full_name")} maxLength={120} autoComplete="name" />
+        <span className="field-label">Nivel</span>
+        <LevelSelect value={p.level} onChange={(level) => setP({ ...p, level })} label="Nivel" />
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label htmlFor="f-uni" className="field-label">
-            Universidad
+          <label htmlFor="f-inst" className="field-label">
+            Liceo o universidad
           </label>
-          <input id="f-uni" className="field" list="unis" value={p.university} onChange={set("university")} maxLength={120} placeholder="UCV" />
-          <datalist id="unis">
-            {UNIVERSITIES.map((u) => (
-              <option key={u} value={u} />
-            ))}
-          </datalist>
+          <input id="f-inst" className="field" value={p.institution} onChange={set("institution")} maxLength={120} placeholder="U.E. Colegio San José" />
         </div>
         <div>
           <label htmlFor="f-career" className="field-label">
-            Carrera
+            Carrera o mención <span className="font-normal text-ink-soft">(opcional)</span>
           </label>
-          <input id="f-career" className="field" value={p.career} onChange={set("career")} maxLength={120} placeholder="Economía" />
-        </div>
-        <div>
-          <label htmlFor="f-sem" className="field-label">
-            Semestre o año
-          </label>
-          <input id="f-sem" className="field" value={p.semester} onChange={set("semester")} maxLength={40} placeholder="4to semestre" />
-        </div>
-        <div>
-          <label htmlFor="f-phone" className="field-label">
-            WhatsApp <span className="font-normal text-soft">(opcional)</span>
-          </label>
-          <input id="f-phone" className="field" value={p.phone} onChange={set("phone")} maxLength={30} inputMode="tel" placeholder="0412-0000000" autoComplete="tel" />
+          <input id="f-career" className="field" value={p.career} onChange={set("career")} maxLength={120} placeholder="Ciencias" />
         </div>
       </div>
       <div className="flex items-center justify-end gap-3">
         {msg && (
-          <span className="text-[13px] text-soft" role="status">
+          <span className="text-[13.5px] text-ink-soft" role="status">
             {msg}
           </span>
         )}
@@ -103,7 +98,7 @@ export function PasswordForm() {
       </div>
       <div className="flex items-center justify-end gap-3">
         {msg && (
-          <span className="text-[13px] text-soft" role="status">
+          <span className="text-[13px] text-ink-soft" role="status">
             {msg}
           </span>
         )}
@@ -132,7 +127,7 @@ export function DangerZone({ email }: { email: string }) {
   return (
     <div className="flex flex-col gap-3 rounded-[12px] bg-white p-4 ring-1 ring-[#f1c4c6]">
       <p className="text-[14px]">
-        Se borrarán tu cuenta, tus materias, todos tus materiales y archivos, y tus envíos. Los registros de pago se conservan por obligación contable, sin tus archivos. Esto no se puede deshacer.
+        Se borrarán tu cuenta, tus tareas, mensajes y archivos. Los registros de pago se conservan por obligación contable, sin tus archivos. Esto no se puede deshacer.
       </p>
       <div>
         <label htmlFor="f-confirm" className="field-label">
@@ -140,7 +135,7 @@ export function DangerZone({ email }: { email: string }) {
         </label>
         <input id="f-confirm" className="field" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder={email} autoComplete="off" />
       </div>
-      {error && <p className="text-[13px] text-negative">{error}</p>}
+      {error && <p className="text-[13px] text-rojo">{error}</p>}
       <div className="flex gap-2">
         <button
           type="button"

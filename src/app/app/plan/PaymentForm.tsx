@@ -4,7 +4,7 @@ import { useState } from "react";
 import { createPayment } from "@/app/app/actions";
 import { safeName } from "@/lib/client-upload";
 import { formatBs, formatDate, formatUsd } from "@/lib/format";
-import type { Plan } from "@/lib/plans";
+import { CREDIT_PACKS, CREDIT_PRICE_USD, type Plan } from "@/lib/plans";
 import { createClient } from "@/lib/supabase/client";
 import type { PaymentMethod, PaymentMethodsSetting } from "@/lib/types";
 
@@ -13,6 +13,7 @@ const METHODS: { id: PaymentMethod; label: string }[] = [
   { id: "binance", label: "Binance" },
   { id: "zelle", label: "Zelle" },
 ];
+const LOOK: Record<string, string> = { basico: "var(--celeste)", pro: "var(--beige)", full: "var(--papel)" };
 
 export function PaymentForm({
   userId,
@@ -20,18 +21,20 @@ export function PaymentForm({
   rate,
   rateUpdated,
   methods,
-  currentPlan,
+  initialPlan,
 }: {
   userId: string;
   plans: Plan[];
   rate: number;
   rateUpdated: string | null;
   methods: PaymentMethodsSetting;
-  currentPlan: string;
+  initialPlan: "basico" | "pro" | "full";
 }) {
   const router = useRouter();
-  const [planId, setPlanId] = useState<Plan["id"]>(currentPlan === "repaso_plus" ? "repaso_plus" : "repaso");
+  const [kind, setKind] = useState<"plan" | "creditos">("plan");
+  const [planId, setPlanId] = useState(initialPlan);
   const [months, setMonths] = useState(1);
+  const [quantity, setQuantity] = useState(3);
   const [method, setMethod] = useState<PaymentMethod>("pago_movil");
   const [reference, setReference] = useState("");
   const [payerName, setPayerName] = useState("");
@@ -40,12 +43,12 @@ export function PaymentForm({
   const [receipt, setReceipt] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
 
   const plan = plans.find((p) => p.id === planId)!;
-  const usd = plan.priceUsd * months;
+  const usd = Math.round((kind === "plan" ? plan.priceUsd * months : CREDIT_PRICE_USD * quantity) * 100) / 100;
   const bs = rate > 0 ? usd * rate : 0;
   const pm = methods.pago_movil;
-  const pmReady = Boolean(pm.phone && pm.bank);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -54,63 +57,101 @@ export function PaymentForm({
     try {
       let receiptPath: string | null = null;
       if (receipt) {
-        if (receipt.size > 10 * 1024 * 1024) throw new Error("El comprobante debe pesar menos de 10 MB.");
-        const supabase = createClient();
+        if (receipt.size > 10 * 1024 * 1024) throw new Error("El capture debe pesar menos de 10 MB.");
         const path = `${userId}/${Date.now()}-${safeName(receipt.name)}`;
-        const { error: upErr } = await supabase.storage.from("receipts").upload(path, receipt, { contentType: receipt.type || undefined });
-        if (upErr) throw new Error("No se pudo subir el comprobante.");
+        const { error: upErr } = await createClient().storage.from("receipts").upload(path, receipt, { contentType: receipt.type || undefined });
+        if (upErr) throw new Error("No se pudo subir el capture.");
         receiptPath = path;
       }
-      const r = await createPayment({ plan: planId as "repaso" | "repaso_plus", months, method, reference, payerName, payerIdDoc, payerPhone, receiptPath });
+      const r = await createPayment({ kind, plan: kind === "plan" ? planId : undefined, months, quantity, method, reference, payerName, payerIdDoc, payerPhone, receiptPath });
       if (!r.ok) throw new Error(r.error);
+      setDone(r.message ?? "Recibido.");
+      setReference("");
+      setReceipt(null);
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Algo salió mal.");
+    } finally {
       setBusy(false);
     }
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
-      <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <legend className="sr-only">Elige tu plan</legend>
-        {plans.map((p) => (
-          <label
-            key={p.id}
-            className={`flex cursor-pointer flex-col gap-1 rounded-[16px] border p-4 transition-colors ${planId === p.id ? "border-text bg-white" : "border-line bg-white hover:border-control"}`}
-          >
-            <input type="radio" name="plan" value={p.id} checked={planId === p.id} onChange={() => setPlanId(p.id)} className="sr-only" />
-            <span className="flex items-baseline justify-between gap-2">
-              <span className="text-[16px] font-semibold">{p.name}</span>
-              <span className="num text-[16px]">{formatUsd(p.priceUsd)} al mes</span>
-            </span>
-            <span className="text-[13px] text-soft">{p.blurb}</span>
-            <ul className="mt-2 flex flex-col gap-1 text-[13px]">
-              {p.features.slice(0, 4).map((f) => (
-                <li key={f}>{f}</li>
-              ))}
-            </ul>
-          </label>
+    <form onSubmit={submit} className="flex flex-col gap-5">
+      <div className="seg max-w-[420px]" role="radiogroup" aria-label="Qué quieres pagar">
+        {(["plan", "creditos"] as const).map((k) => (
+          <button key={k} type="button" role="radio" aria-checked={kind === k} onClick={() => setKind(k)}>
+            {k === "plan" ? "Plan mensual" : "Tareas sueltas"}
+          </button>
         ))}
-      </fieldset>
+        <div className="seg-active" aria-hidden="true" style={{ clipPath: kind === "plan" ? "inset(0 50% 0 0 round 9px)" : "inset(0 0 0 50% round 9px)" }}>
+          <span>Plan mensual</span>
+          <span>Tareas sueltas</span>
+        </div>
+      </div>
+
+      {kind === "plan" ? (
+        <fieldset className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <legend className="sr-only">Elige tu plan</legend>
+          {plans.map((p) => (
+            <label
+              key={p.id}
+              className={`relative flex cursor-pointer flex-col gap-1 rounded-[16px] p-4 transition-[box-shadow,transform] duration-150 active:scale-[0.99] ${
+                planId === p.id ? "shadow-[inset_0_0_0_2.5px_var(--marino)]" : "shadow-[inset_0_0_0_1px_var(--line-strong)]"
+              }`}
+              style={{ background: LOOK[p.id] }}
+            >
+              <input type="radio" name="plan" value={p.id} checked={planId === p.id} onChange={() => setPlanId(p.id as typeof planId)} className="sr-only" />
+              <span className="font-[family-name:var(--font-display)] text-[20px] font-bold">{p.name}</span>
+              <span className="num text-[15px] font-semibold">
+                {formatUsd(p.priceUsd)} al mes{rate > 0 ? ` · ${formatBs(p.priceUsd * rate)}` : ""}
+              </span>
+              <span className="text-[13.5px] text-[#3a4462]">
+                {p.tasksPerMonth} tareas{p.urgent ? " · urgentes" : ""} · {p.revisions} {p.revisions === 1 ? "corrección" : "correcciones"}
+              </span>
+            </label>
+          ))}
+        </fieldset>
+      ) : (
+        <fieldset>
+          <legend className="field-label">¿Cuántas tareas?</legend>
+          <div className="grid grid-cols-4 gap-2">
+            {CREDIT_PACKS.map((n) => (
+              <label
+                key={n}
+                className={`flex min-h-[64px] cursor-pointer flex-col items-center justify-center rounded-[12px] text-center transition-[background-color,transform] duration-150 active:scale-[0.97] ${
+                  quantity === n ? "bg-marino text-papel" : "bg-surface text-marino shadow-[inset_0_0_0_1px_var(--line)]"
+                }`}
+              >
+                <input type="radio" name="qty" value={n} checked={quantity === n} onChange={() => setQuantity(n)} className="sr-only" />
+                <span className="font-[family-name:var(--font-display)] text-[22px] font-bold leading-none">{n}</span>
+                <span className="num mt-1 text-[12.5px]">{formatUsd(n * CREDIT_PRICE_USD)}</span>
+              </label>
+            ))}
+          </div>
+          <p className="hint">Cada tarea suelta cuesta {formatUsd(CREDIT_PRICE_USD)} y no vence.</p>
+        </fieldset>
+      )}
 
       <div className="panel flex flex-col gap-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <label htmlFor="p-months" className="field-label">
-              Meses
-            </label>
-            <select id="p-months" className="field" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
-              {[1, 2, 3, 4, 5, 6].map((n) => (
-                <option key={n} value={n}>
-                  {n} {n === 1 ? "mes" : "meses"} · {formatUsd(plan.priceUsd * n)}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <span className="field-label">Método de pago</span>
-            <div className="flex gap-1 rounded-[10px] bg-white p-1 ring-1 ring-control" role="radiogroup" aria-label="Método de pago">
+          {kind === "plan" && (
+            <div>
+              <label htmlFor="p-months" className="field-label">
+                Meses
+              </label>
+              <select id="p-months" className="field" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
+                {[1, 2, 3, 6].map((n) => (
+                  <option key={n} value={n}>
+                    {n} {n === 1 ? "mes" : "meses"} · {formatUsd(plan.priceUsd * n)}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+          <div className={kind === "plan" ? "" : "sm:col-span-2"}>
+            <span className="field-label">Cómo pagas</span>
+            <div className="grid grid-cols-3 gap-1 rounded-[12px] bg-white p-1 shadow-[inset_0_0_0_1px_var(--line-strong)]" role="radiogroup" aria-label="Método de pago">
               {METHODS.map((m) => (
                 <button
                   key={m.id}
@@ -118,7 +159,7 @@ export function PaymentForm({
                   role="radio"
                   aria-checked={method === m.id}
                   onClick={() => setMethod(m.id)}
-                  className={`h-9 flex-1 rounded-[8px] text-[13px] font-medium transition-colors ${method === m.id ? "bg-ink text-white" : "text-soft hover:text-text"}`}
+                  className={`h-10 rounded-[9px] text-[14px] font-semibold transition-colors ${method === m.id ? "bg-marino text-papel" : "text-ink-soft hover:text-marino"}`}
                 >
                   {m.label}
                 </button>
@@ -127,58 +168,57 @@ export function PaymentForm({
           </div>
         </div>
 
-        {/* Datos para pagar */}
-        <div className="rounded-[12px] bg-white p-4 ring-1 ring-line">
-          <p className="text-[13px] text-soft">Monto a pagar</p>
-          <p className="num mt-1 text-[28px] leading-none tracking-[-0.02em]">
+        <div className="rounded-[14px] bg-white p-4 shadow-[inset_0_0_0_1px_var(--line)]">
+          <p className="text-[13.5px] text-ink-soft">Monto a pagar</p>
+          <p className="num mt-1 font-[family-name:var(--font-display)] text-[34px] font-bold leading-none tracking-[-0.02em]">
             {method === "pago_movil" && bs > 0 ? formatBs(bs) : formatUsd(usd)}
           </p>
           {method === "pago_movil" && bs > 0 && (
-            <p className="num mt-1 text-[13px] text-soft">
-              {formatUsd(usd)} a {rate.toLocaleString("es-VE", { maximumFractionDigits: 2 })} Bs/$ (BCV{rateUpdated ? `, ${formatDate(rateUpdated, { day: "numeric", month: "short" })}` : ""})
+            <p className="num mt-1 text-[13.5px] text-ink-soft">
+              {formatUsd(usd)} a {rate.toLocaleString("es-VE", { maximumFractionDigits: 2 })} Bs/$ (tasa BCV{rateUpdated ? ` del ${formatDate(rateUpdated, { day: "numeric", month: "short" })}` : ""})
             </p>
           )}
-          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-[14px]">
+          <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-6 gap-y-1.5 text-[14.5px]">
             {method === "pago_movil" &&
-              (pmReady ? (
+              (pm.phone && pm.bank ? (
                 <>
-                  <dt className="text-soft">Banco</dt>
+                  <dt className="text-ink-soft">Banco</dt>
                   <dd>{pm.bank}</dd>
-                  <dt className="text-soft">Teléfono</dt>
-                  <dd className="num">{pm.phone}</dd>
-                  <dt className="text-soft">Cédula / RIF</dt>
-                  <dd className="num">{pm.id_doc}</dd>
+                  <dt className="text-ink-soft">Teléfono</dt>
+                  <dd className="num font-semibold">{pm.phone}</dd>
+                  <dt className="text-ink-soft">Cédula / RIF</dt>
+                  <dd className="num font-semibold">{pm.id_doc}</dd>
                   {pm.holder && (
                     <>
-                      <dt className="text-soft">Titular</dt>
+                      <dt className="text-ink-soft">Titular</dt>
                       <dd>{pm.holder}</dd>
                     </>
                   )}
                 </>
               ) : (
-                <dd className="col-span-2 text-soft">Los datos de Pago Móvil aún no están configurados. Escríbenos para pagar.</dd>
+                <dd className="col-span-2 text-ink-soft">Los datos de Pago Móvil aún no están configurados. Escríbenos para pagar.</dd>
               ))}
             {method === "binance" && (
               <>
-                <dt className="text-soft">Binance Pay ID</dt>
-                <dd className="num">{methods.binance.pay_id || "—"}</dd>
+                <dt className="text-ink-soft">Binance Pay ID</dt>
+                <dd className="num font-semibold">{methods.binance.pay_id || "—"}</dd>
                 {methods.binance.email && (
                   <>
-                    <dt className="text-soft">Correo</dt>
+                    <dt className="text-ink-soft">Correo</dt>
                     <dd>{methods.binance.email}</dd>
                   </>
                 )}
-                <dt className="text-soft">Moneda</dt>
+                <dt className="text-ink-soft">Moneda</dt>
                 <dd>USDT</dd>
               </>
             )}
             {method === "zelle" && (
               <>
-                <dt className="text-soft">Correo Zelle</dt>
-                <dd>{methods.zelle.email || "—"}</dd>
+                <dt className="text-ink-soft">Correo Zelle</dt>
+                <dd className="font-semibold">{methods.zelle.email || "—"}</dd>
                 {methods.zelle.holder && (
                   <>
-                    <dt className="text-soft">Titular</dt>
+                    <dt className="text-ink-soft">Titular</dt>
                     <dd>{methods.zelle.holder}</dd>
                   </>
                 )}
@@ -216,28 +256,30 @@ export function PaymentForm({
               </div>
             </>
           )}
-          <div className={method === "pago_movil" ? "" : "sm:col-span-1"}>
+          <div>
             <span className="field-label">
-              Capture del pago <span className="font-normal text-soft">(opcional)</span>
+              Capture del pago <span className="font-normal text-ink-soft">(opcional)</span>
             </span>
             <input id="p-receipt" type="file" accept="image/*,.pdf" className="sr-only" onChange={(e) => setReceipt(e.target.files?.[0] ?? null)} />
-            <label htmlFor="p-receipt" className="app-btn app-btn-secondary w-full">
+            <label htmlFor="p-receipt" className="app-btn app-btn-secondary w-full cursor-pointer">
               {receipt ? receipt.name.slice(0, 28) : "Adjuntar capture"}
             </label>
           </div>
         </div>
 
         {error && (
-          <p className="rounded-[10px] bg-[#ffedea] px-3 py-2 text-[13px] text-[#831c1e]" role="alert">
+          <p className="rounded-[10px] bg-[#fbe5e3] px-3 py-2 text-[14px] text-[#8e2019]" role="alert">
             {error}
           </p>
         )}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-[13px] text-soft">Activamos tu plan cuando verificamos el pago, normalmente el mismo día.</p>
-          <button type="submit" className="app-btn" disabled={busy}>
-            {busy ? "Enviando…" : "Ya pagué, registrar pago"}
-          </button>
-        </div>
+        {done && (
+          <p className="rounded-[10px] bg-[#dff4e7] px-3 py-2 text-[14px] text-[#135c37]" role="status">
+            {done}
+          </p>
+        )}
+        <button type="submit" className="btn w-full sm:w-auto sm:self-end" disabled={busy}>
+          {busy ? "Enviando…" : "Ya pagué, registrar pago"}
+        </button>
       </div>
     </form>
   );

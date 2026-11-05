@@ -29,7 +29,7 @@ export function RateForm({ current }: { current: number }) {
       </div>
       <div className="flex items-center justify-end gap-3">
         {msg && (
-          <span className="text-[13px] text-soft" role="status">
+          <span className="text-[13px] text-ink-soft" role="status">
             {msg}
           </span>
         )}
@@ -91,7 +91,7 @@ export function MethodsForm({ initial }: { initial: PaymentMethodsSetting }) {
       </fieldset>
       <div className="flex items-center justify-end gap-3">
         {msg && (
-          <span className="text-[13px] text-soft" role="status">
+          <span className="text-[13px] text-ink-soft" role="status">
             {msg}
           </span>
         )}

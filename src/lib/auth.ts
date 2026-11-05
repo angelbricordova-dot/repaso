@@ -27,7 +27,7 @@ export const getSession = cache(async () => {
     const admin = createAdminClient();
     const { data } = await admin
       .from("profiles")
-      .upsert({ id: user.id, email: user.email ?? "", full_name: (user.user_metadata?.full_name as string) ?? "" })
+      .upsert({ id: user.id, email: user.email ?? "", full_name: (user.user_metadata?.full_name as string) ?? "", referral_code: Math.random().toString(36).slice(2, 8).toUpperCase() })
       .select("*")
       .single<Profile>();
     profile = data;
@@ -49,8 +49,15 @@ export async function requireUser() {
   return { user: s.user, profile: s.profile, supabase: s.supabase };
 }
 
+/** Equipo que resuelve tareas (staff) o administrador. */
+export async function requireStaff() {
+  const s = await requireUser();
+  if (s.profile.role !== "admin" && s.profile.role !== "staff") redirect("/app");
+  return s;
+}
+
 export async function requireAdmin() {
   const s = await requireUser();
-  if (s.profile.role !== "admin") redirect("/app");
+  if (s.profile.role !== "admin") redirect(s.profile.role === "staff" ? "/admin/tareas" : "/app");
   return s;
 }

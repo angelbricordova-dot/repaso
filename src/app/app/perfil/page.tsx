@@ -9,11 +9,11 @@ export default async function ProfilePage() {
   const { profile } = await requireUser();
   return (
     <Page>
-      <TitleRow title="Perfil" subtitle={`${profile.email} · en Repaso desde el ${formatDate(profile.created_at, { day: "numeric", month: "long", year: "numeric" })}`} />
+      <TitleRow title="Perfil" subtitle={`${profile.email} · desde el ${formatDate(profile.created_at, { day: "numeric", month: "long", year: "numeric" })}`} />
       <div className="flex flex-col">
-        <Row title="Tus datos" description="Nos ayudan a adaptar los ejemplos a tu carrera. Solo tú y el equipo de Repaso los ven.">
+        <Row title="Tus datos" description="Tu WhatsApp es por donde te avisamos cuando tu tarea esté lista.">
           <ProfileForm
-            initial={{ full_name: profile.full_name, university: profile.university, career: profile.career, semester: profile.semester, phone: profile.phone }}
+            initial={{ full_name: profile.full_name, whatsapp: profile.whatsapp, level: profile.level, institution: profile.institution, career: profile.career }}
           />
         </Row>
         <Row title="Contraseña" description="Usa al menos 8 caracteres.">
@@ -23,9 +23,9 @@ export default async function ProfilePage() {
           <div className="flex flex-col gap-4">
             <div>
               <a href="/api/export" className="app-btn app-btn-secondary">
-                Descargar mis datos (JSON)
+                Descargar mis datos
               </a>
-              <p className="hint">Incluye perfil, materias, kits de estudio, conversaciones con el tutor, envíos y pagos.</p>
+              <p className="hint">Perfil, tareas, mensajes y pagos en un archivo JSON.</p>
             </div>
             <DangerZone email={profile.email} />
           </div>
@@ -37,12 +37,12 @@ export default async function ProfilePage() {
 
 function Row({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
   return (
-    <section className="grid grid-cols-1 gap-4 border-b border-line py-8 first:pt-0 last:border-0 md:grid-cols-[minmax(0,360px)_minmax(0,1fr)] md:gap-10">
+    <section className="grid grid-cols-1 gap-4 border-b border-line py-8 first:pt-0 last:border-0 md:grid-cols-[minmax(0,320px)_minmax(0,1fr)] md:gap-10">
       <div className="md:pt-2">
-        <h2 className="text-[16px] font-medium">{title}</h2>
-        <p className="mt-1 text-[14px] text-soft">{description}</p>
+        <h2 className="text-[17px] font-bold">{title}</h2>
+        <p className="mt-1 text-[14.5px] text-ink-soft">{description}</p>
       </div>
-      <div className="rounded-[16px] bg-[#fafafa] p-4 md:p-5">{children}</div>
+      <div className="rounded-[16px] bg-surface p-4 md:p-5">{children}</div>
     </section>
   );
 }

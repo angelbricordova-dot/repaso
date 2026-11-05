@@ -1,17 +1,18 @@
 import Link from "next/link";
+import { Logo } from "@/components/landing/Logo";
 
 export default function LegalLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-svh bg-ground">
-      <header className="flex h-16 items-center justify-between px-5 md:px-8">
-        <Link href="/" className="text-[24px] font-semibold tracking-[-0.04em]">
-          repaso
+    <div className="min-h-svh bg-papel">
+      <header className="flex h-16 items-center justify-between bg-celeste px-5 md:px-8">
+        <Link href="/" aria-label="Inicio">
+          <Logo size={18} />
         </Link>
-        <nav className="flex gap-5 text-[14px]" aria-label="Legal">
-          <Link href="/terminos" className="hover:underline">
+        <nav className="flex gap-5 text-[15px] font-medium" aria-label="Legal">
+          <Link href="/terminos" className="link">
             Términos
           </Link>
-          <Link href="/privacidad" className="hover:underline">
+          <Link href="/privacidad" className="link">
             Privacidad
           </Link>
         </nav>

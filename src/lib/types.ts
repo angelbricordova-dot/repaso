@@ -1,90 +1,66 @@
+export type Level = "bachillerato" | "diversificado" | "universidad";
+export type Role = "student" | "staff" | "admin";
+
 export type Profile = {
   id: string;
   email: string;
   full_name: string;
-  university: string;
+  whatsapp: string;
+  level: Level;
+  institution: string;
   career: string;
-  semester: string;
-  phone: string;
-  role: "student" | "admin";
-  plan: "gratis" | "repaso" | "repaso_plus";
+  role: Role;
+  plan: "gratis" | "basico" | "pro" | "full";
   plan_expires_at: string | null;
+  credits: number;
+  referral_code: string | null;
+  referred_by: string | null;
+  referral_rewarded: boolean;
   terms_version: string | null;
   terms_accepted_at: string | null;
   created_at: string;
 };
 
-export type Subject = { id: string; user_id: string; name: string; exam_date: string | null; created_at: string };
-
-export type MaterialKind = "pdf" | "slides" | "doc" | "image" | "audio" | "video" | "text";
-export type MaterialStatus = "pending" | "processing" | "ready" | "error";
-
-export type Flashcard = { front: string; back: string };
-export type QuizQuestion = { question: string; options: string[]; correct: number; explanation: string };
-export type OpenQuestion = { question: string; answer_guide: string };
-export type KeyConcept = { term: string; definition: string };
-export type SummarySection = { heading: string; body: string };
-
-export type StudyKit = {
-  title: string;
-  one_line: string;
-  summary: SummarySection[];
-  key_concepts: KeyConcept[];
-  flashcards: Flashcard[];
-  quiz: QuizQuestion[];
-  open_questions: OpenQuestion[];
-  likely_exam_topics: string[];
-};
-
-export type MaterialProgress = {
-  /** índice de ficha → caja de Leitner (0 = nueva, 1..4) */
-  cards?: Record<string, number>;
-  quiz_best?: number;
-  quiz_last?: number;
-  quiz_attempts?: number;
-  last_studied_at?: string;
-};
-
-export type Material = {
-  id: string;
-  user_id: string;
-  subject_id: string | null;
-  title: string;
-  kind: MaterialKind;
-  storage_path: string | null;
-  files: StoredFile[];
-  mime_type: string | null;
-  size_bytes: number | null;
-  source_text: string | null;
-  duration_seconds: number | null;
-  status: MaterialStatus;
-  error: string | null;
-  kit: StudyKit | null;
-  progress: MaterialProgress;
-  ai_model: string | null;
-  tokens_in: number | null;
-  tokens_out: number | null;
-  created_at: string;
-  processing_started_at: string | null;
-  processed_at: string | null;
-};
-
 export type StoredFile = { path: string; name: string; size: number; type: string };
 
-export type HelpRequest = {
+export type TaskType = "ejercicios" | "informe" | "ensayo" | "presentacion" | "resumen" | "mapa" | "ingles" | "otro";
+export type TaskStatus = "recibida" | "en_proceso" | "necesita_info" | "entregada" | "corrigiendo" | "cerrada" | "cancelada";
+
+export type Task = {
   id: string;
+  number: number;
   user_id: string;
+  level: Level;
   subject: string;
-  topic: string;
-  details: string;
-  links: string[];
+  task_type: TaskType;
+  title: string;
+  instructions: string;
   files: StoredFile[];
-  exam_date: string | null;
-  status: "recibido" | "en_revision" | "respondido" | "cerrado";
-  admin_response: string | null;
-  response_files: StoredFile[];
+  links: string[];
+  due_at: string;
+  urgent: boolean;
+  cost: number;
+  paid_with: "plan" | "creditos";
+  status: TaskStatus;
+  assigned_to: string | null;
+  delivery_note: string | null;
+  delivery_files: StoredFile[];
+  delivered_at: string | null;
+  revision_requests: number;
+  rating: number | null;
+  rating_comment: string | null;
   created_at: string;
-  responded_at: string | null;
+  updated_at: string;
+};
+
+export type TaskMessage = {
+  id: string;
+  task_id: string;
+  author_id: string | null;
+  from_staff: boolean;
+  body: string;
+  files: StoredFile[];
+  created_at: string;
 };
 
 export type PaymentMethod = "pago_movil" | "binance" | "zelle" | "efectivo";
@@ -92,8 +68,10 @@ export type PaymentMethod = "pago_movil" | "binance" | "zelle" | "efectivo";
 export type Payment = {
   id: string;
   user_id: string;
-  plan: "repaso" | "repaso_plus";
+  kind: "plan" | "creditos";
+  plan: "basico" | "pro" | "full" | null;
   months: number;
+  quantity: number;
   amount_usd: number;
   amount_bs: number | null;
   rate_bs: number | null;

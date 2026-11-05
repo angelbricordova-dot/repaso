@@ -1,21 +1,19 @@
-// Planes de Repaso. Cambia precios y límites aquí; todo lo demás los lee de este archivo.
+// Planes de TareaYa. Cambia precios y cupos aquí; todo lo demás los lee de este archivo.
 
-export type PlanId = "gratis" | "repaso" | "repaso_plus";
+export type PlanId = "gratis" | "basico" | "pro" | "full";
 
 export type Plan = {
   id: PlanId;
   name: string;
   priceUsd: number;
-  /** Materiales procesados por la IA en un mes calendario */
-  materialsPerMonth: number;
-  /** Minutos de clases grabadas (audio o video) transcritos por mes */
-  recordingMinutesPerMonth: number;
-  /** Envíos al equipo de Repaso por mes ("no entendí esta clase") */
-  helpRequestsPerMonth: number;
-  /** Preguntas al tutor por material */
-  tutorQuestionsPerMaterial: number;
-  /** Páginas máximas por PDF */
-  maxPdfPages: number;
+  /** Tareas incluidas por mes calendario */
+  tasksPerMonth: number;
+  /** Horas mínimas de anticipación para una tarea normal */
+  minHours: number;
+  /** Puede pedir entregas urgentes (menos de 24 h; cuentan doble) */
+  urgent: boolean;
+  /** Correcciones incluidas por tarea */
+  revisions: number;
   blurb: string;
   features: string[];
 };
@@ -23,62 +21,61 @@ export type Plan = {
 export const PLANS: Record<PlanId, Plan> = {
   gratis: {
     id: "gratis",
-    name: "Gratis",
+    name: "Sin plan",
     priceUsd: 0,
-    materialsPerMonth: 3,
-    recordingMinutesPerMonth: 0,
-    helpRequestsPerMonth: 0,
-    tutorQuestionsPerMaterial: 10,
-    maxPdfPages: 30,
-    blurb: "Para probar con tu próxima clase.",
-    features: [
-      "3 materiales al mes",
-      "Resumen, fichas, quiz y preguntas de desarrollo",
-      "10 preguntas al tutor por material",
-      "PDF de hasta 30 páginas",
-    ],
+    tasksPerMonth: 0,
+    minHours: 24,
+    urgent: false,
+    revisions: 1,
+    blurb: "Pagas solo las tareas que mandes.",
+    features: ["1 tarea gratis al registrarte", "Tareas sueltas a $1,49", "1 corrección por tarea"],
   },
-  repaso: {
-    id: "repaso",
-    name: "Repaso",
-    priceUsd: 3,
-    materialsPerMonth: 30,
-    recordingMinutesPerMonth: 300,
-    helpRequestsPerMonth: 1,
-    tutorQuestionsPerMaterial: 60,
-    maxPdfPages: 150,
-    blurb: "Para todo el semestre.",
-    features: [
-      "30 materiales al mes",
-      "5 horas de clases grabadas al mes",
-      "60 preguntas al tutor por material",
-      "1 envío al equipo de Repaso al mes",
-      "PDF de hasta 150 páginas",
-    ],
+  basico: {
+    id: "basico",
+    name: "Básico",
+    priceUsd: 5.99,
+    tasksPerMonth: 10,
+    minHours: 24,
+    urgent: false,
+    revisions: 1,
+    blurb: "Para las tareas de la semana.",
+    features: ["10 tareas al mes", "Entrega con 24 horas o más", "1 corrección por tarea", "Chat con quien resuelve tu tarea"],
   },
-  repaso_plus: {
-    id: "repaso_plus",
-    name: "Repaso+",
-    priceUsd: 7,
-    materialsPerMonth: 100,
-    recordingMinutesPerMonth: 1200,
-    helpRequestsPerMonth: 5,
-    tutorQuestionsPerMaterial: 200,
-    maxPdfPages: 300,
-    blurb: "Para carreras pesadas y épocas de parciales.",
-    features: [
-      "100 materiales al mes",
-      "20 horas de clases grabadas al mes",
-      "200 preguntas al tutor por material",
-      "5 envíos al equipo de Repaso al mes, con prioridad",
-      "PDF de hasta 300 páginas",
-    ],
+  pro: {
+    id: "pro",
+    name: "Pro",
+    priceUsd: 9.99,
+    tasksPerMonth: 25,
+    minHours: 12,
+    urgent: true,
+    revisions: 2,
+    blurb: "Para épocas de entregas y parciales.",
+    features: ["25 tareas al mes", "Entregas urgentes en menos de 24 horas", "2 correcciones por tarea", "Prioridad en la cola"],
+  },
+  full: {
+    id: "full",
+    name: "Full",
+    priceUsd: 16.99,
+    tasksPerMonth: 60,
+    minHours: 6,
+    urgent: true,
+    revisions: 3,
+    blurb: "Para carreras pesadas o varios hermanos.",
+    features: ["60 tareas al mes", "Entregas urgentes desde 6 horas", "3 correcciones por tarea", "Primera prioridad en la cola"],
   },
 };
 
-export const PAID_PLANS = [PLANS.repaso, PLANS.repaso_plus];
+export const PAID_PLANS = [PLANS.basico, PLANS.pro, PLANS.full];
 
-/** El plan vigente: si el pago venció, vuelve a gratis. */
+/** Precio de una tarea suelta (crédito), en USD. */
+export const CREDIT_PRICE_USD = 1.49;
+export const CREDIT_PACKS = [1, 3, 5, 10];
+
+/** Créditos que gana quien invita cuando su invitado hace su primer pago. */
+export const REFERRAL_REWARD = 2;
+/** Créditos extra para el invitado en su primer pago. */
+export const REFERRED_REWARD = 1;
+
 export function effectivePlan(plan: string | null | undefined, expiresAt: string | null | undefined): Plan {
   const id = (plan ?? "gratis") as PlanId;
   if (id === "gratis" || !PLANS[id]) return PLANS.gratis;
@@ -89,3 +86,6 @@ export function effectivePlan(plan: string | null | undefined, expiresAt: string
 export function startOfMonthIso(d = new Date()): string {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString();
 }
+
+/** Prioridad en la cola: más alto va primero. */
+export const PLAN_PRIORITY: Record<PlanId, number> = { full: 3, pro: 2, basico: 1, gratis: 0 };

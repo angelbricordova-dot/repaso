@@ -7,23 +7,21 @@ import type { Payment } from "@/lib/types";
 import { PaymentForm } from "./PaymentForm";
 
 export const metadata = { title: "Plan y pagos" };
-
 const METHOD_LABEL: Record<string, string> = { pago_movil: "Pago Móvil", binance: "Binance", zelle: "Zelle", efectivo: "Efectivo" };
+const PLAN_NAME: Record<string, string> = { basico: "Básico", pro: "Pro", full: "Full" };
 
-export default async function PlanPage() {
+export default async function PlanPage({ searchParams }: { searchParams: Promise<{ plan?: string }> }) {
+  const { plan: wanted } = await searchParams;
   const { profile, supabase } = await requireUser();
   const plan = effectivePlan(profile.plan, profile.plan_expires_at);
-  const monthStart = startOfMonthIso();
-  const [{ count: used }, { data: recs }, { count: helpUsed }, { data: payments }, settings] = await Promise.all([
-    supabase.from("materials").select("id", { count: "exact", head: true }).eq("user_id", profile.id).eq("status", "ready").gte("processed_at", monthStart),
-    supabase.from("materials").select("duration_seconds").eq("user_id", profile.id).in("kind", ["audio", "video"]).gte("created_at", monthStart),
-    supabase.from("help_requests").select("id", { count: "exact", head: true }).eq("user_id", profile.id).gte("created_at", monthStart),
+  const [{ data: used }, { data: payments }, settings] = await Promise.all([
+    supabase.from("tasks").select("cost").eq("user_id", profile.id).eq("paid_with", "plan").neq("status", "cancelada").gte("created_at", startOfMonthIso()),
     supabase.from("payments").select("*").eq("user_id", profile.id).order("created_at", { ascending: false }),
     getSettings(),
   ]);
-  const recMin = Math.round(((recs ?? []) as { duration_seconds: number | null }[]).reduce((a, r) => a + (r.duration_seconds ?? 0), 0) / 60);
+  const usedCount = (used ?? []).reduce((a, t) => a + (t.cost as number), 0);
   const pays = (payments ?? []) as Payment[];
-  const pending = pays.find((p) => p.status === "pendiente");
+  const pending = pays.filter((p) => p.status === "pendiente");
 
   return (
     <Page>
@@ -31,85 +29,74 @@ export default async function PlanPage() {
         title="Plan y pagos"
         subtitle={
           plan.id === "gratis"
-            ? "Estás en el plan gratis. Paga solo los meses que quieras: no hay cobros automáticos."
+            ? "No tienes plan. Paga solo los meses que quieras: no hay cobros automáticos."
             : `Plan ${plan.name} activo hasta el ${formatDate(profile.plan_expires_at, { day: "numeric", month: "long", year: "numeric" })}.`
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        <section className="panel flex flex-col gap-5 lg:col-span-4" aria-labelledby="uso">
-          <h2 id="uso" className="text-[14px] font-semibold">
-            Tu uso este mes · plan {plan.name}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-10">
+        <section aria-labelledby="uso" className="panel flex flex-col gap-5 self-start">
+          <h2 id="uso" className="text-[15px] font-bold">
+            Este mes
           </h2>
-          <UsageBar label="Clases" used={used ?? 0} total={plan.materialsPerMonth} />
-          <UsageBar label="Minutos de grabaciones" used={recMin} total={plan.recordingMinutesPerMonth} />
-          <UsageBar label="Envíos al equipo" used={helpUsed ?? 0} total={plan.helpRequestsPerMonth} />
-          <p className="text-[13px] text-soft">El conteo se reinicia el primer día de cada mes.</p>
-        </section>
-
-        <section className="lg:col-span-8" aria-labelledby="mejorar">
-          <h2 id="mejorar" className="sr-only">
-            Mejorar plan
-          </h2>
-          {pending ? (
-            <div className="panel">
-              <p className="text-[16px] font-semibold">Estamos verificando tu pago</p>
-              <p className="mt-1 text-[14px] text-soft">
-                {METHOD_LABEL[pending.method]} · referencia {pending.reference} · {formatUsd(Number(pending.amount_usd))}
-                {pending.amount_bs ? ` (${formatBs(Number(pending.amount_bs))})` : ""}. Normalmente lo activamos el mismo día.
-              </p>
-            </div>
-          ) : (
-            <PaymentForm userId={profile.id} plans={PAID_PLANS} rate={settings.rate.bs_per_usd} rateUpdated={settings.rate.updated} methods={settings.methods} currentPlan={plan.id} />
+          <UsageBar label={plan.id === "gratis" ? "Tareas del plan" : `Tareas del plan ${plan.name}`} used={usedCount} total={plan.tasksPerMonth} />
+          <div className="flex items-baseline justify-between text-[14px]">
+            <span>Tareas sueltas</span>
+            <span className="num font-semibold">{profile.credits}</span>
+          </div>
+          <p className="text-[13px] text-ink-soft">El cupo del plan se reinicia el día 1 de cada mes. Las tareas sueltas no vencen.</p>
+          {pending.length > 0 && (
+            <p className="rounded-[10px] bg-[#fff4d6] px-3 py-2 text-[13.5px] text-[#7a4d00]">
+              Estamos verificando {pending.length === 1 ? "un pago" : `${pending.length} pagos`}. Normalmente lo activamos el mismo día.
+            </p>
           )}
         </section>
 
-        <section className="panel lg:col-span-12" aria-labelledby="historial">
-          <h2 id="historial" className="mb-4 text-[14px] font-semibold">
-            Historial de pagos <span className="num ml-1 font-normal text-soft">{pays.length}</span>
-          </h2>
-          {pays.length === 0 ? (
-            <EmptyState>Todavía no has registrado pagos.</EmptyState>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[620px] text-[14px]">
-                <thead>
-                  <tr className="border-b border-line text-left text-[12px] text-soft">
-                    <th className="py-2 pr-4 font-normal">Fecha</th>
-                    <th className="py-2 pr-4 font-normal">Plan</th>
-                    <th className="py-2 pr-4 font-normal">Método</th>
-                    <th className="py-2 pr-4 font-normal">Referencia</th>
-                    <th className="py-2 pr-4 text-right font-normal">Monto</th>
-                    <th className="py-2 font-normal">Estado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pays.map((p) => (
-                    <tr key={p.id} className="border-b border-rule last:border-0">
-                      <td className="py-3 pr-4">{formatDate(p.created_at, { day: "numeric", month: "short", year: "numeric" })}</td>
-                      <td className="py-3 pr-4">
-                        {p.plan === "repaso" ? "Repaso" : "Repaso+"} · {p.months} {p.months === 1 ? "mes" : "meses"}
-                      </td>
-                      <td className="py-3 pr-4">{METHOD_LABEL[p.method]}</td>
-                      <td className="py-3 pr-4">{p.reference}</td>
-                      <td className="num py-3 pr-4 text-right">
-                        {formatUsd(Number(p.amount_usd))}
-                        {p.amount_bs ? <span className="block text-[12px] text-soft">{formatBs(Number(p.amount_bs))}</span> : null}
-                      </td>
-                      <td className="py-3">
-                        <span className={`pill ${p.status === "aprobado" ? "pill-positive" : p.status === "rechazado" ? "pill-negative" : "pill-warning"}`}>
-                          {p.status === "aprobado" ? "Aprobado" : p.status === "rechazado" ? "Rechazado" : "Pendiente"}
-                        </span>
-                        {p.admin_note && <span className="block text-[12px] text-soft">{p.admin_note}</span>}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <section aria-label="Pagar">
+          <PaymentForm
+            userId={profile.id}
+            plans={PAID_PLANS}
+            rate={settings.rate.bs_per_usd}
+            rateUpdated={settings.rate.updated}
+            methods={settings.methods}
+            initialPlan={(["basico", "pro", "full"].includes(wanted ?? "") ? wanted : plan.id === "gratis" ? "basico" : plan.id) as "basico" | "pro" | "full"}
+          />
         </section>
       </div>
+
+      <section aria-labelledby="historial" className="mt-10">
+        <h2 id="historial" className="mb-3 text-[17px] font-bold">
+          Historial de pagos
+        </h2>
+        {pays.length === 0 ? (
+          <EmptyState>Todavía no has registrado pagos.</EmptyState>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {pays.map((p) => (
+              <li key={p.id} className="card flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <div>
+                  <p className="text-[15px] font-semibold">
+                    {p.kind === "plan" ? `Plan ${PLAN_NAME[p.plan ?? ""]} · ${p.months} ${p.months === 1 ? "mes" : "meses"}` : `${p.quantity} ${p.quantity === 1 ? "tarea suelta" : "tareas sueltas"}`}
+                  </p>
+                  <p className="text-[13.5px] text-ink-soft">
+                    {formatDate(p.created_at, { day: "numeric", month: "short", year: "numeric" })} · {METHOD_LABEL[p.method]} · Ref. {p.reference}
+                  </p>
+                  {p.admin_note && <p className="text-[13.5px] text-rojo">{p.admin_note}</p>}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="num text-right text-[14.5px]">
+                    {formatUsd(Number(p.amount_usd))}
+                    {p.amount_bs ? <span className="block text-[12.5px] text-ink-soft">{formatBs(Number(p.amount_bs))}</span> : null}
+                  </span>
+                  <span className={`pill ${p.status === "aprobado" ? "pill-done" : p.status === "rechazado" ? "pill-urgent" : "pill-attention"}`}>
+                    {p.status === "aprobado" ? "Aprobado" : p.status === "rechazado" ? "Rechazado" : "Por verificar"}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </Page>
   );
 }

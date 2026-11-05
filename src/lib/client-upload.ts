@@ -1,5 +1,3 @@
-import type { MaterialKind } from "@/lib/types";
-
 export function safeName(name: string) {
   return (
     name
@@ -11,33 +9,21 @@ export function safeName(name: string) {
   );
 }
 
-export function kindFromName(name: string, mime: string): MaterialKind | null {
-  const ext = name.toLowerCase().split(".").pop() ?? "";
-  if (mime === "application/pdf" || ext === "pdf") return "pdf";
-  if (ext === "pptx" || mime.includes("presentationml")) return "slides";
-  if (ext === "docx" || mime.includes("wordprocessingml")) return "doc";
-  if (ext === "txt" || ext === "md") return "text";
-  if (mime.startsWith("image/")) return "image";
-  if (mime.startsWith("audio/") || ["mp3", "m4a", "wav", "ogg", "opus", "aac"].includes(ext)) return "audio";
-  if (mime.startsWith("video/") || ["mp4", "mov", "webm", "mkv"].includes(ext)) return "video";
-  return null;
-}
-
-/** Llama al procesador hasta que el material quede listo (las grabaciones van en dos etapas). */
-export async function processMaterial(id: string, onStage: (s: string) => void) {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    onStage(attempt === 0 ? "Leyendo tu clase…" : "Preparando resumen, fichas y quiz…");
-    const res = await fetch("/api/materials/process", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ materialId: id }),
-    });
-    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; stage?: string; error?: string };
-    if (!res.ok || !data.ok) throw new Error(data.error || "No pudimos procesar el material.");
-    if (data.stage === "ready") return;
-    if (data.stage === "transcribed") {
-      onStage("Clase transcrita. Preparando resumen, fichas y quiz…");
-      continue;
-    }
+/** Reduce las fotos a 2000 px en JPEG antes de subirlas: gastan muchos menos datos. */
+export async function compressImage(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.type === "image/gif") return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const max = 2000;
+    const scale = Math.min(1, max / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob: Blob = await new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("blob"))), "image/jpeg", 0.82));
+    if (blob.size >= file.size) return file;
+    return new File([blob], file.name.replace(/\.[^.]+$/, "") + ".jpg", { type: "image/jpeg" });
+  } catch {
+    return file;
   }
 }
